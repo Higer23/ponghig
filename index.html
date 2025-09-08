@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Pong Higer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Press Start B-P', cursive;
+            touch-action: none;
+            overflow: hidden;
+            background: linear-gradient(-45deg, #000000, #130f40, #000000, #30336b);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+        }
+        @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        .text-glow { text-shadow: 0 0 8px rgba(255, 255, 255, 0.8), 0 0 12px rgba(0, 255, 255, 0.6); }
+        canvas {
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.5), 0 0 40px rgba(0, 255, 255, 0.3);
+            border: 3px solid cyan;
+            image-rendering: pixelated;
+        }
+        .btn-neon {
+            box-shadow: 0 0 5px cyan, 0 0 15px cyan, 0 0 25px cyan;
+            transition: all 0.3s ease; text-shadow: 0 0 4px cyan;
+        }
+        .btn-neon:hover, .btn-neon.active {
+            box-shadow: 0 0 10px #fff, 0 0 30px #fff, 0 0 50px cyan;
+            color: cyan; background-color: #1a202c;
+        }
+        .crt-overlay::before {
+            content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 2; background-size: 100% 4px, 3px 100%; pointer-events: none;
+        }
+        #notification {
+            transition: transform 0.5s ease-in-out;
+            transform: translateY(-150%);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center h-screen m-0 p-0 crt-overlay">
+
+    <!-- Ana Menü -->
+    <div id="startScreen" class="text-center p-4">
+        <h1 class="text-5xl md:text-7xl font-bold mb-4 text-glow" style="color: cyan;">PONG HIGER</h1>
+        <p class="mb-4 text-lg text-gray-300">Highscore: <span id="highScoreDisplay">0</span></p>
+        <div class="mb-6"><h2 class="text-2xl mb-2 text-glow">Spielmodus</h2><div class="flex justify-center gap-4"><button data-mode="1P" class="mode-select bg-gray-800 border-2 border-cyan-400 text-white font-bold py-2 px-6 rounded-lg text-xl btn-neon">1 Spieler</button><button data-mode="2P" class="mode-select bg-gray-800 border-2 border-cyan-400 text-white font-bold py-2 px-6 rounded-lg text-xl btn-neon">2 Spieler</button></div></div>
+        <div id="difficultySelection" class="mb-8"><h2 class="text-2xl mb-2 text-glow">Schwierigkeit</h2><div class="flex justify-center gap-4"><button data-difficulty="easy" class="difficulty-select bg-gray-800 border-2 border-cyan-400 text-white py-2 px-4 rounded-lg text-lg btn-neon">Leicht</button><button data-difficulty="normal" class="difficulty-select bg-gray-800 border-2 border-cyan-400 text-white py-2 px-4 rounded-lg text-lg btn-neon">Mittel</button><button data-difficulty="hard" class="difficulty-select bg-gray-800 border-2 border-cyan-400 text-white py-2 px-4 rounded-lg text-lg btn-neon">Schwer</button></div></div>
+        <button id="startButton" class="bg-gray-800 border-2 border-cyan-600 text-white font-bold py-4 px-10 rounded-lg text-3xl btn-neon animate-pulse">START</button>
+        <div class="mt-4 space-x-4">
+            <button id="howToPlayButton" class="text-cyan-300 underline">Spielanleitung</button>
+            <button id="achievementsButton" class="text-cyan-300 underline">Erfolge</button>
+        </div>
+    </div>
+
+    <!-- Oyun Ekranı -->
+    <div id="gameScreen" class="hidden w-full h-full flex flex-col items-center justify-center p-2 relative">
+        <div class="flex justify-between w-full max-w-4xl text-4xl mb-2 px-4 absolute top-2"><span id="playerScore" class="text-glow">0</span><span id="cpuScore" class="text-glow">0</span></div>
+        <canvas id="pongCanvas" class="bg-transparent rounded-lg"></canvas>
+    </div>
+
+    <!-- Oyun Bitti Ekranı -->
+    <div id="gameOverScreen" class="hidden text-center">
+        <h1 id="winnerMessage" class="text-6xl font-bold mb-6 text-glow"></h1>
+        <!-- YENİ: Oyun Sonu İstatistikleri -->
+        <div id="gameStats" class="mb-6 text-lg bg-black bg-opacity-30 p-4 rounded-lg">
+            <p>Längste Rallye: <span id="longestRallyStat" class="text-cyan-300">0</span></p>
+            <p>Power-Ups genutzt: <span id="powerUpsUsedStat" class="text-cyan-300">0</span></p>
+        </div>
+        <button id="restartButton" class="bg-gray-800 border-2 border-cyan-400 text-white font-bold py-4 px-8 rounded-lg text-2xl btn-neon">NOCHMAL SPIELEN</button>
+    </div>
+
+    <!-- Modallar -->
+    <div id="settingsIcon" class="absolute top-4 right-4 cursor-pointer z-50"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="cyan" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></div>
+    <div id="settingsModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-40">
+        <div class="bg-gray-800 p-8 rounded-lg border-2 border-cyan-400 shadow-lg text-center w-11/12 max-w-sm">
+            <h2 class="text-3xl mb-6 text-glow">Einstellungen</h2>
+            <!-- YENİ: Ayrı Ses Kontrolleri -->
+            <div class="mb-4 text-left"><label for="musicVolumeSlider" class="block mb-2">Musik</label><input type="range" id="musicVolumeSlider" min="-40" max="0" class="w-full"></div>
+            <div class="mb-6 text-left"><label for="sfxVolumeSlider" class="block mb-2">Soundeffekte</label><input type="range" id="sfxVolumeSlider" min="-30" max="10" class="w-full"></div>
+            <button id="closeSettings" class="bg-red-500 text-white font-bold py-2 px-6 rounded-lg">Schließen</button>
+        </div>
+    </div>
+    <div id="achievementsModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-40"><div class="bg-gray-800 p-8 rounded-lg border-2 border-cyan-400 shadow-lg text-center w-11/12 md:w-1/2"><h2 class="text-3xl mb-6 text-glow">Erfolge</h2><div id="achievementsList" class="text-left max-h-64 overflow-y-auto"></div><button id="closeAchievements" class="mt-6 bg-red-500 text-white font-bold py-2 px-6 rounded-lg">Schließen</button></div></div>
+    <div id="howToPlayModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-40"><div class="bg-gray-800 p-6 md:p-8 rounded-lg border-2 border-cyan-400 shadow-lg w-11/12 md:w-2/3 lg:w-1/2 max-h-[80vh]"><h2 class="text-3xl mb-4 text-glow text-center">Spielanleitung</h2><div class="text-left text-sm md:text-base space-y-4 overflow-y-auto max-h-[60vh] pr-4"><div><strong class="text-cyan-300 text-lg">Ziel des Spiels</strong><p>Das Ziel ist einfach: Erziele 10 Punkte, bevor es dein Gegner tut! Schlage den Ball am Gegner vorbei, um einen Punkt zu erzielen.</p></div><div><strong class="text-cyan-300 text-lg">Steuerung</strong><ul class="list-disc list-inside space-y-2"><li><strong>Mobil:</strong> Berühre und ziehe deinen Finger auf dem Bildschirm nach oben oder unten, um deinen Schläger zu bewegen.<ul class="list-disc list-inside ml-6"><li>Im 1-Spieler-Modus steuerst du den linken Schläger.</li><li>Im 2-Spieler-Modus steuert die linke Bildschirmhälfte Spieler 1 und die rechte Hälfte Spieler 2.</li></ul></li><li><strong>Desktop (Tastatur):</strong><ul class="list-disc list-inside ml-6"><li><strong>Spieler 1:</strong> 'W' (hoch) und 'S' (runter).</li><li><strong>Spieler 2:</strong> Pfeiltaste Oben (hoch) und Pfeiltaste Unten (runter).</li></ul></li></ul></div><div><strong class="text-cyan-300 text-lg">Spielmechanik</strong><ul class="list-disc list-inside"><li><strong>Ballgeschwindigkeit:</strong> Der Ball wird mit jedem Schlag schneller. Seine Farbe ändert sich von Cyan zu Rot, je schneller er wird.</li><li><strong>Schlägergröße:</strong> Wenn ein Spieler mit 2 oder mehr Punkten führt, wird sein Schläger kleiner, während der des Gegners größer wird.</li><li><strong>Zickzack-Ball:</strong> Manchmal beginnt der Ball, sich in einem unvorhersehbaren Zickzack-Muster zu bewegen.</li></ul></div><div><strong class="text-cyan-300 text-lg">Power-Ups</strong><p>Während des Spiels erscheinen zufällig farbige Kugeln. Triff sie mit dem Ball, um einen Vorteil zu erhalten!</p><ul class="list-disc list-inside"><li><span class="text-green-400">Grün (Wachsen):</span> Dein Schläger wird vorübergehend größer.</li><li><span class="text-red-400">Rot (Schrumpfen):</span> Der Schläger deines Gegners wird vorübergehend kleiner.</li><li><span class="text-yellow-400">Gelb (Schnell):</span> Der Ball erhält einen plötzlichen Geschwindigkeitsschub.</li></ul></div></div><div class="text-center mt-6"><button id="closeHowToPlay" class="bg-red-500 text-white font-bold py-2 px-6 rounded-lg">Schließen</button></div></div></div>
+
+    <!-- Bildirim -->
+    <div id="notification" class="fixed top-4 left-1/2 -translate-x-1/2 bg-cyan-500 text-black p-4 rounded-lg shadow-lg z-50 text-center">
+        <h3 id="notifTitle" class="font-bold">Erfolg freigeschaltet!</h3>
+        <p id="notifDesc">Beschreibung</p>
+    </div>
+
+    <script>
+        const elements = {
+            startScreen: document.getElementById('startScreen'), gameScreen: document.getElementById('gameScreen'), gameOverScreen: document.getElementById('gameOverScreen'),
+            startButton: document.getElementById('startButton'), restartButton: document.getElementById('restartButton'), winnerMessage: document.getElementById('winnerMessage'),
+            canvas: document.getElementById('pongCanvas'), playerScoreEl: document.getElementById('playerScore'), cpuScoreEl: document.getElementById('cpuScore'),
+            highScoreDisplay: document.getElementById('highScoreDisplay'), difficultySelection: document.getElementById('difficultySelection'),
+            settingsIcon: document.getElementById('settingsIcon'), settingsModal: document.getElementById('settingsModal'),
+            closeSettings: document.getElementById('closeSettings'), musicVolumeSlider: document.getElementById('musicVolumeSlider'), sfxVolumeSlider: document.getElementById('sfxVolumeSlider'),
+            achievementsButton: document.getElementById('achievementsButton'), achievementsModal: document.getElementById('achievementsModal'),
+            achievementsList: document.getElementById('achievementsList'), closeAchievements: document.getElementById('closeAchievements'),
+            howToPlayButton: document.getElementById('howToPlayButton'), howToPlayModal: document.getElementById('howToPlayModal'), closeHowToPlay: document.getElementById('closeHowToPlay'),
+            notification: document.getElementById('notification'), notifTitle: document.getElementById('notifTitle'), notifDesc: document.getElementById('notifDesc'),
+            longestRallyStat: document.getElementById('longestRallyStat'), powerUpsUsedStat: document.getElementById('powerUpsUsedStat'),
+        };
+        const ctx = elements.canvas.getContext('2d');
+        
+        let ball, player1, player2, powerUp;
+        let rallyCount = 0, longestRallyInMatch = 0, powerUpCounter = 0, wasPlayerDownThreeZero = false;
+        let playerScore = 0, cpuScore = 0;
+        const winningScore = 10;
+        let gameRunning = false, initialBallSpeed, ballSpeedX, ballSpeedY;
+        let powerUpInterval = null;
+        let notificationQueue = [];
+        let settings = { gameMode: '1P', difficulty: 'normal', musicVolume: -10, sfxVolume: 0, highScore: 0, achievements: {} };
+        
+        // ✅ YENİ: Geliştirilmiş Yapay Zeka Değişkenleri
+        let cpuTargetError = 0;
+        let cpuHits = 0;
+        let cpuFocusThreshold; // Kaç vuruşta bir hata yapma olasılığı olacağı
+
+        // ... (ACHIEVEMENTS_LIST değişmedi)
+         const ACHIEVEMENTS_LIST = { 'first_win': { title: "Erster Sieg", desc: "Gewinne dein erstes Spiel." }, 'rally_king': { title: "Rallye-König", desc: "Erreiche 10 Schläge in einem Ballwechsel." }, 'endless_rally': { title: "Endlos-Rallye", desc: "Erreiche 25 Schläge in einem Ballwechsel." }, 'flawless': { title: "Makelloser Sieg", desc: "Gewinne, ohne dass der Gegner punktet." }, 'power_user': { title: "Power-Nutzer", desc: "Nutze 3 Power-Ups in einem Spiel." }, 'comeback': { title: "Comeback", desc: "Gewinne ein Spiel nach einem 0-3 Rückstand." }, 'speed_demon': { title: "Geschwindigkeits-Dämon", desc: "Bringe den Ball auf maximale Geschwindigkeit." }, 'hard_mode_win': { title: "Profi-Spieler", desc: "Gewinne ein Spiel auf Schwer." }, 'zigzag_master': { title: "Zickzack-Meister", desc: "Erziel einen Punkt mit einem Zickzack-Ball." }};
+
+        // ✅ YENİ: Ayrı Ses Kanalları
+        const musicVolume = new Tone.Volume(settings.musicVolume).toDestination();
+        const sfxVolume = new Tone.Volume(settings.sfxVolume).toDestination();
+        const synth = new Tone.Synth().connect(musicVolume);
+        const metalSynth = new Tone.MetalSynth({ frequency: 150, envelope: { attack: 0.001, decay: 0.1, release: 0.01 }, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5 }).connect(sfxVolume);
+        const explosionSound = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.005, decay: 0.2, sustain: 0 } }).connect(sfxVolume);
+        const powerUpSound = new Tone.Synth({ oscillator: { type: 'sawtooth' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.2 } }).connect(sfxVolume);
+        const music = new Tone.Sequence((time, note) => { synth.triggerAttackRelease(note, '8n', time); }, ['C2', 'E2', 'G2', 'B2', 'C3', 'B2', 'G2', 'E2'], '4n').start(0);
+        music.loop = true; Tone.Transport.bpm.value = 100;
+
+        const saveSettings = () => localStorage.setItem('pongHigerSettings', JSON.stringify(settings));
+        function loadSettings() {
+            const saved = localStorage.getItem('pongHigerSettings');
+            if (saved) settings = { ...settings, ...JSON.parse(saved) };
+            elements.highScoreDisplay.textContent = settings.highScore;
+            elements.musicVolumeSlider.value = settings.musicVolume;
+            elements.sfxVolumeSlider.value = settings.sfxVolume;
+            musicVolume.volume.value = settings.musicVolume;
+            sfxVolume.volume.value = settings.sfxVolume;
+
+            // Kaydedilen ayarları menüde göster
+            document.querySelector('.mode-select.active')?.classList.remove('active');
+            document.querySelector(`.mode-select[data-mode="${settings.gameMode}"]`).classList.add('active');
+            document.querySelector('.difficulty-select.active')?.classList.remove('active');
+            document.querySelector(`.difficulty-select[data-difficulty="${settings.difficulty}"]`).classList.add('active');
+            elements.difficultySelection.style.display = (settings.gameMode === '1P') ? 'block' : 'none';
+        }
+        
+        const resizeCanvas = () => { const aspectRatio = 16 / 9; let canvasWidth = window.innerWidth * 0.95; let canvasHeight = window.innerHeight * 0.9; if (canvasWidth / canvasHeight > aspectRatio) { canvasWidth = canvasHeight * aspectRatio; } else { canvasHeight = canvasWidth / aspectRatio; } elements.canvas.width = canvasWidth; elements.canvas.height = canvasHeight; setupGameObjects(); };
+
+        function setupGameObjects() {
+            const paddleWidth = elements.canvas.width * 0.02;
+            const paddleHeight = elements.canvas.height * 0.2;
+            ball = { x: elements.canvas.width / 2, y: elements.canvas.height / 2, radius: 0, color: 'hsl(180, 100%, 70%)', isZigzag: false };
+            player1 = { x: paddleWidth, y: elements.canvas.height / 2 - paddleHeight / 2, width: paddleWidth, height: paddleHeight, color: '#fff', baseHeight: paddleHeight };
+            player2 = { x: elements.canvas.width - paddleWidth * 2, y: elements.canvas.height / 2 - paddleHeight / 2, width: paddleWidth, height: paddleHeight, color: '#fff', baseHeight: paddleHeight };
+            
+            const speedFactors = { easy: 0.05, normal: 0.08, hard: 0.12 }; 
+            player2.speed = speedFactors[settings.difficulty];
+            initialBallSpeed = elements.canvas.width * 0.0035; 
+        }
+
+        function draw() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+            ctx.fillRect(0, 0, elements.canvas.width, elements.canvas.height);
+            if (powerUp.active) {
+                // ✅ YENİ: Power-up için titreşen parlama efekti
+                const glow = 15 + Math.sin(Date.now() / 150) * 5;
+                ctx.fillStyle = powerUp.color; ctx.shadowColor = powerUp.color; ctx.shadowBlur = glow;
+                ctx.beginPath(); ctx.arc(powerUp.x, powerUp.y, powerUp.radius, 0, Math.PI * 2); ctx.fill();
+            }
+            const drawPaddle = (p) => { ctx.fillStyle = p.color; ctx.shadowColor = p.color; ctx.shadowBlur = 15; ctx.fillRect(p.x, p.y, p.width, p.height); };
+            const drawBall = (b) => { ctx.fillStyle = b.isZigzag ? '#9f7aea' : b.color; ctx.shadowColor = b.isZigzag ? '#9f7aea' : b.color; ctx.shadowBlur = 20; ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2); ctx.fill(); };
+            drawPaddle(player1); drawPaddle(player2); drawBall(ball); ctx.shadowBlur = 0;
+        }
+
+        const vibrate = (duration) => { if (navigator.vibrate) navigator.vibrate(duration); };
+        function resetBall() { ball.x = elements.canvas.width / 2; ball.y = elements.canvas.height / 2; let direction = Math.random() > 0.5 ? 1 : -1; ballSpeedX = initialBallSpeed * direction; ballSpeedY = initialBallSpeed * (Math.random() - 0.5) * 2; ball.color = 'hsl(180, 100%, 70%)'; rallyCount = 0; const baseRadius = Math.min(elements.canvas.width, elements.canvas.height) * 0.015; ball.radius = baseRadius * 0.8; ball.isZigzag = false; }
+        const spawnPowerUp = () => { if (powerUp && powerUp.active) return; const types = [{ type: 'grow', color: '#4CAF50' }, { type: 'shrink', color: '#f44336' }, { type: 'fast', color: '#ffeb3b' }]; const randType = types[Math.floor(Math.random() * types.length)]; powerUp = { x: Math.random() * (elements.canvas.width * 0.4) + (elements.canvas.width * 0.3), y: Math.random() * (elements.canvas.height * 0.8) + (elements.canvas.height * 0.1), radius: elements.canvas.width * 0.02, active: true, ...randType }; };
+        function activatePowerUp(type, paddle) { powerUpSound.triggerAttackRelease('A4', '8n'); powerUp.active = false; powerUpCounter++; checkAchievements({ event: 'powerup' }); switch(type) { case 'grow': paddle.height *= 1.5; setTimeout(() => paddle.height = paddle.baseHeight, 7000); break; case 'shrink': paddle.height *= 0.5; setTimeout(() => paddle.height = paddle.baseHeight, 7000); break; case 'fast': ballSpeedX *= 1.5; ballSpeedY *= 1.5; setTimeout(() => { ballSpeedX /= 1.5; ballSpeedY /= 1.5; }, 5000); break; } }
+        function updatePaddleSizes() { const scoreDiff = playerScore - cpuScore; if (Math.abs(scoreDiff) >= 2) { if (scoreDiff > 0) { player1.height = player1.baseHeight * 0.75; player2.height = player2.baseHeight * 1.25; } else { player2.height = player2.baseHeight * 0.75; player1.height = player1.baseHeight * 1.25; } } else { player1.height = player1.baseHeight; player2.height = player2.baseHeight; } }
+        const keysPressed = {}; window.addEventListener('keydown', e => keysPressed[e.key] = true); window.addEventListener('keyup', e => keysPressed[e.key] = false);
+
+        function update() {
+            if (!gameRunning) return;
+            // ... (pozisyon güncellemeleri ve tuş kontrolleri değişmedi)
+            ball.top = ball.y - ball.radius; ball.bottom = ball.y + ball.radius; ball.left = ball.x - ball.radius; ball.right = ball.x + ball.radius; player1.top = player1.y; player1.bottom = player1.y + player1.height; player1.left = player1.x; player1.right = player1.x + player1.width; player2.top = player2.y; player2.bottom = player2.y + player2.height; player2.left = player2.x; player2.right = player2.x + player2.width;
+            const paddleSpeed = elements.canvas.height * 0.015;
+            if (keysPressed['w'] && player1.y > 0) player1.y -= paddleSpeed;
+            if (keysPressed['s'] && player1.bottom < elements.canvas.height) player1.y += paddleSpeed;
+            if (settings.gameMode === '2P') { if (keysPressed['ArrowUp'] && player2.y > 0) player2.y -= paddleSpeed; if (keysPressed['ArrowDown'] && player2.bottom < elements.canvas.height) player2.y += paddleSpeed; }
+            
+            ball.x += ballSpeedX; ball.y += ballSpeedY;
+            if (ball.isZigzag) ball.y += Math.sin(ball.x * 0.1) * 3;
+            
+            // ✅ YENİ: Dengelenmiş ve Hata Yapan Yapay Zeka
+            if (settings.gameMode === '1P') {
+                if (cpuHits > cpuFocusThreshold) {
+                    const errorMagnitude = { easy: player2.height * 0.6, normal: player2.height * 0.4, hard: player2.height * 0.25 }[settings.difficulty];
+                    cpuTargetError = (Math.random() - 0.5) * errorMagnitude;
+                    cpuHits = 0; // Hata yaptıktan sonra sayacı sıfırla
+                    // Yeni odak eşiğini ayarla
+                    const focusRanges = { easy: [2, 4], normal: [4, 7], hard: [6, 10] };
+                    const range = focusRanges[settings.difficulty];
+                    cpuFocusThreshold = Math.floor(Math.random() * (range[1] - range[0] + 1)) + range[0];
+                }
+                const targetY = ball.y + cpuTargetError;
+                player2.y += (targetY - (player2.y + player2.height / 2)) * player2.speed;
+            }
+            
+            if (ball.top < 0) { ball.y = ball.radius; ballSpeedY = -ballSpeedY; metalSynth.triggerAttackRelease(200, "32n"); vibrate(25); } else if (ball.bottom > elements.canvas.height) { ball.y = elements.canvas.height - ball.radius; ballSpeedY = -ballSpeedY; metalSynth.triggerAttackRelease(200, "32n"); vibrate(25); }
+            
+            let p = (ball.x < elements.canvas.width / 2) ? player1 : player2;
+            if (ball.right > p.left && ball.left < p.right && ball.bottom > p.top && ball.top < p.bottom) {
+                if (p === player2) cpuHits++; // Sadece CPU vurduğunda sayacı artır
+                if (ballSpeedX > 0) { ball.x = p.left - ball.radius; } else { ball.x = p.right + ball.radius; }
+                const maxAngle = Math.PI / 4; let collidePoint = (ball.y - (p.y + p.height / 2)) / (p.height / 2); collidePoint = Math.max(-1, Math.min(1, collidePoint)); let angleRad = collidePoint * maxAngle;
+                let direction = (ball.x < elements.canvas.width / 2) ? 1 : -1;
+                let currentSpeed = Math.sqrt(ballSpeedX**2 + ballSpeedY**2);
+                currentSpeed = Math.min(currentSpeed + 0.1, initialBallSpeed * 2.5);
+                ballSpeedX = direction * currentSpeed * Math.cos(angleRad); ballSpeedY = currentSpeed * Math.sin(angleRad);
+                metalSynth.triggerAttackRelease(440, "32n"); vibrate(10);
+                const speedRatio = Math.min(currentSpeed / (initialBallSpeed * 2.5), 1);
+                ball.color = `hsl(${180 - (speedRatio * 180)}, 100%, 70%)`;
+                rallyCount++;
+                if (rallyCount > longestRallyInMatch) longestRallyInMatch = rallyCount;
+                if (!ball.isZigzag && Math.random() < 0.1) { ball.isZigzag = true; setTimeout(() => { ball.isZigzag = false; }, 4000); }
+                checkAchievements({ event: 'rally', speed: currentSpeed });
+            }
+            
+            if (powerUp.active) { const dx = ball.x - powerUp.x; const dy = ball.y - powerUp.y; if (Math.sqrt(dx*dx + dy*dy) < ball.radius + powerUp.radius) activatePowerUp(powerUp.type, ball.x < elements.canvas.width / 2 ? player2 : player1); }
+            if (ball.left < 0) { cpuScore++; elements.cpuScoreEl.textContent = cpuScore; checkAchievements({ event: 'score', scorer: 'cpu' }); resetBall(); vibrate([100, 30, 100]); explosionSound.triggerAttackRelease("8n"); updatePaddleSizes(); } else if (ball.right > elements.canvas.width) { playerScore++; elements.playerScoreEl.textContent = playerScore; checkAchievements({ event: 'score', scorer: 'player' }); resetBall(); vibrate([100, 30, 100]); explosionSound.triggerAttackRelease("8n"); updatePaddleSizes(); }
+            if (playerScore >= winningScore || cpuScore >= winningScore) endGame();
+        }
+
+        const gameLoop = () => { update(); draw(); handleNotifications(); if (gameRunning) requestAnimationFrame(gameLoop); };
+        function movePaddleTouch(e) { e.preventDefault(); let rect = elements.canvas.getBoundingClientRect(); for (let i = 0; i < e.touches.length; i++) { let touch = e.touches[i]; let targetY; if (touch.clientX < window.innerWidth / 2) { targetY = touch.clientY - rect.top - player1.height / 2; if (targetY >= 0 && targetY <= elements.canvas.height - player1.height) player1.y = targetY; } else if (settings.gameMode === '2P') { targetY = touch.clientY - rect.top - player2.height / 2; if (targetY >= 0 && targetY <= elements.canvas.height - player2.height) player2.y = targetY; } } }
+        elements.canvas.addEventListener('touchmove', movePaddleTouch); elements.canvas.addEventListener('touchstart', movePaddleTouch);
+
+        function startGame() {
+            Tone.start(); Tone.Transport.start();
+            playerScore = 0; cpuScore = 0;
+            powerUpCounter = 0; rallyCount = 0; longestRallyInMatch = 0; wasPlayerDownThreeZero = false;
+            cpuHits = 0; cpuTargetError = 0;
+            const focusRanges = { easy: [2, 4], normal: [4, 7], hard: [6, 10] };
+            const range = focusRanges[settings.difficulty];
+            cpuFocusThreshold = Math.floor(Math.random() * (range[1] - range[0] + 1)) + range[0];
+            elements.playerScoreEl.textContent = playerScore; elements.cpuScoreEl.textContent = cpuScore;
+            elements.startScreen.classList.add('hidden'); elements.gameOverScreen.classList.add('hidden');
+            elements.gameScreen.classList.remove('hidden'); elements.settingsIcon.style.display = 'none';
+            resizeCanvas(); resetBall(); updatePaddleSizes();
+            powerUp = { active: false };
+            if (powerUpInterval) clearInterval(powerUpInterval);
+            powerUpInterval = setInterval(spawnPowerUp, 10000);
+            gameRunning = true;
+            gameLoop();
+        }
+
+        function endGame() {
+            gameRunning = false;
+            Tone.Transport.stop();
+            if (powerUpInterval) clearInterval(powerUpInterval); powerUpInterval = null;
+            elements.longestRallyStat.textContent = longestRallyInMatch;
+            elements.powerUpsUsedStat.textContent = powerUpCounter;
+            if (playerScore > cpuScore) { elements.winnerMessage.textContent = settings.gameMode === '1P' ? "GEWONNEN!" : "SPIELER 1 GEWINNT!"; elements.winnerMessage.style.color = 'cyan'; checkAchievements({ event: 'win' }); if (settings.gameMode === '1P' && playerScore > settings.highScore) { settings.highScore = playerScore; elements.highScoreDisplay.textContent = settings.highScore; saveSettings(); } } else { elements.winnerMessage.textContent = settings.gameMode === '1P' ? "VERLOREN" : "SPIELER 2 GEWINNT!"; elements.winnerMessage.style.color = '#ff4d4d'; }
+            elements.gameScreen.classList.add('hidden'); elements.gameOverScreen.classList.remove('hidden');
+            elements.settingsIcon.style.display = 'block';
+        }
+
+        const unlockAchievement = (id) => { if (!settings.achievements[id]) { settings.achievements[id] = true; saveSettings(); notificationQueue.push(ACHIEVEMENTS_LIST[id]); } };
+        function checkAchievements(data) { if (data.event === 'win' && playerScore > cpuScore) { unlockAchievement('first_win'); if (cpuScore === 0) unlockAchievement('flawless'); if (wasPlayerDownThreeZero) unlockAchievement('comeback'); if (settings.difficulty === 'hard') unlockAchievement('hard_mode_win'); } if (data.event === 'score') { if (cpuScore === 3 && playerScore === 0) wasPlayerDownThreeZero = true; if (ball.isZigzag && data.scorer === 'player') unlockAchievement('zigzag_master'); } if (data.event === 'rally') { if (rallyCount >= 10) unlockAchievement('rally_king'); if (rallyCount >= 25) unlockAchievement('endless_rally'); if (data.speed >= initialBallSpeed * 2.5 - 0.1) unlockAchievement('speed_demon'); } if (data.event === 'powerup' && powerUpCounter >= 3) unlockAchievement('power_user'); }
+        function handleNotifications() { if (notificationQueue.length > 0 && elements.notification.style.transform !== 'translateY(0%)') { const notif = notificationQueue.shift(); elements.notifTitle.textContent = "Erfolg freigeschaltet!"; elements.notifDesc.textContent = `${notif.title}`; elements.notification.style.transform = 'translateY(0%)'; setTimeout(() => { elements.notification.style.transform = 'translateY(-150%)'; }, 2500); } }
+        function displayAchievements() { elements.achievementsList.innerHTML = ''; for (const id in ACHIEVEMENTS_LIST) { const isUnlocked = settings.achievements[id]; const item = ACHIEVEMENTS_LIST[id]; const div = document.createElement('div'); div.className = `p-2 my-1 rounded ${isUnlocked ? 'bg-cyan-800 text-white' : 'bg-gray-600 text-gray-400'}`; div.innerHTML = `<strong class="text-glow">${item.title}</strong><p class="text-sm">${item.desc}</p>`; elements.achievementsList.appendChild(div); } }
+
+        elements.startButton.addEventListener('click', startGame);
+        elements.restartButton.addEventListener('click', () => { elements.gameOverScreen.classList.add('hidden'); elements.startScreen.classList.remove('hidden'); });
+        document.querySelectorAll('.mode-select').forEach(btn => btn.addEventListener('click', (e) => { settings.gameMode = e.target.dataset.mode; saveSettings(); loadSettings(); }));
+        document.querySelectorAll('.difficulty-select').forEach(btn => btn.addEventListener('click', (e) => { settings.difficulty = e.target.dataset.difficulty; saveSettings(); loadSettings(); }));
+        elements.settingsIcon.addEventListener('click', () => elements.settingsModal.classList.remove('hidden'));
+        elements.closeSettings.addEventListener('click', () => elements.settingsModal.classList.add('hidden'));
+        elements.musicVolumeSlider.addEventListener('input', (e) => { settings.musicVolume = e.target.value; musicVolume.volume.value = settings.musicVolume; saveSettings(); });
+        elements.sfxVolumeSlider.addEventListener('input', (e) => { settings.sfxVolume = e.target.value; sfxVolume.volume.value = settings.sfxVolume; saveSettings(); });
+        elements.achievementsButton.addEventListener('click', () => { displayAchievements(); elements.achievementsModal.classList.remove('hidden'); });
+        elements.closeAchievements.addEventListener('click', () => elements.achievementsModal.classList.add('hidden'));
+        elements.howToPlayButton.addEventListener('click', () => elements.howToPlayModal.classList.remove('hidden'));
+        elements.closeHowToPlay.addEventListener('click', () => elements.howToPlayModal.classList.add('hidden'));
+
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('load', () => { loadSettings(); resizeCanvas(); });
+    </script>
+</body>
+</html>
