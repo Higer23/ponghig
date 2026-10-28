@@ -1,13 +1,20 @@
-# ponghig
+# Pong Higer
 
-No description has been provided yet.
+A classic Pong game for the browser, implemented as a single HTML page.
 
-## Details
+## How to Play
 
-- Primary language: HTML
-- License: not specified
-- Repository: https://github.com/Higer23/ponghig
+Open `index.html` and play against the computer. Follow the on-screen controls shown in the game.
 
-## Status
+## Getting Started
 
-Setup and usage instructions are not yet documented. They will be added in a future update.
+```bash
+git clone https://github.com/Higer23/ponghig.git
+cd ponghig
+```
+
+Then open `index.html` in a modern browser.
+
+## License
+
+No license has been specified yet.
